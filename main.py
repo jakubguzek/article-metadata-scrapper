@@ -11,44 +11,43 @@ from requests import get
 
 class Scrapper(ABC):
 
-    def __init__(self, jsonData=None):
+    def __init__(self, json_data=None):
         self.dois: list[str] = []
         self.pmids: list[str] = []
         self.url: str = ""
-        path = os.path.abspath(jsonData)
-        jsonFile = open(path, 'r')
-        self.jsonData: dict = load(jsonFile)
-        jsonFile.close()
-        for data in self.jsonData.values():
+        path = os.path.abspath(json_data)
+        with open(path, "r") as json_file:
+            self.json_data: dict = load(json_file)
+        for data in self.json_data.values():
             try:
                 self.dois.append(data["doi"].strip())
             except AttributeError:
                 self.pmids.append(data["pmid"])
 
-    def __get_article_page__(self, doi: str):
+    def get_article_page(self, doi: str):
         headers = {'User-Agent': utils.get_random_agent()}
-        self.articleUrl: str = f'{self.url}"{doi}"'
-        page = get(self.articleUrl, headers=headers)
+        article_url: str = f'{self.url}"{doi}"'
+        page = get(article_url, headers=headers)
         return page
 
     @abstractmethod
-    def __get_authors__(self, root):
+    def get_authors(self, root):
         pass
 
     @abstractmethod
-    def __get_primary_metadata__(self, root, doi=None, pmid=None):
+    def get_primary_metadata(self, root, doi=None, pmid=None):
         pass
 
     @abstractmethod
-    def __get_secondary_metadata__(self, root):
+    def get_secondary_metadata(self, root):
         pass
 
     @abstractmethod
-    def __generate_csl_json_entry__(self, authors, primaryMetadata, secondaryMetadata):
+    def generate_csl_json_entry(self, authors, primary_metadata, secondary_metadata):
         pass
 
     @abstractmethod
-    def __extract_data__(self, identifierList):
+    def extract_data(self, identifier_list):
         pass
 
     @abstractmethod
@@ -58,46 +57,45 @@ class Scrapper(ABC):
 
 class PubMedScrapper(Scrapper):
 
-    def __init__(self, jsonData=None):
-        super().__init__(jsonData)
+    def __init__(self, json_data=None):
+        super().__init__(json_data)
         self.url = f'https://pubmed.ncbi.nlm.nih.gov/?term='
-        self.articleMetadata: list[dict] = []
-        self.articlesNotFound: list[str] = []
+        self.article_metadata: list[dict] = []
+        self.articles_not_found: list[str] = []
 
-    def __is_in_pubmed__(self, doi, root):
+    def is_in_pubmed(self, doi: str, root) -> bool:
         try:
-            queryErrorMessage: str = root.xpath("//em[@class='altered-search-explanation query-error-message']/text()")[0]
-            if ("term was ignored" in queryErrorMessage) or ("term was not found" in queryErrorMessage):
-                print(f"The following term was not found in PubMed: {doi}")
-                self.articlesNotFound.append(doi)
-                return False
+            query_error_message: str = root.xpath(
+                "//em[@class='altered-search-explanation query-error-message']/text()")[0]
+            if ("term was ignored" in query_error_message) or ("term was not found" in query_error_message):
+                self.articles_not_found.append(doi)
+                raise UrLContentError(f"The following term was not found in PubMed: {doi}")
             else:
                 return True
         except IndexError:
             return True
 
-    def __get_authors__(self, root) -> Union[list[dict[str, str]], int]:
-        authorList: list[dict[str, str]] = []
+    def get_authors(self, root) -> Union[list[dict[str, str]]]:
+        authors: list[dict[str, str]] = []
         try:
-            rawAuthorsList: list[str] = root.xpath("//div[@class='authors-list']/span/a/text()")
-            rawAuthorsList = rawAuthorsList[0:int(len(rawAuthorsList) / 2)]
+            raw_authors: list[str] = root.xpath("//div[@class='authors-list']/span/a/text()")
+            raw_authors = raw_authors[0:int(len(raw_authors) / 2)]
         except IndexError:
-            print("Failed to extract authors")
-            return 1
-        lastName: str = ""
-        for author in rawAuthorsList:
-            firstName = author.split(" ")[0]
-            middleNames: list[str] = findall(" \w ", author)
-            givenName: str = firstName
-            for name in middleNames:
-                givenName += name
+            raise UrLContentError("Failed to extract authors")
+        last_name: str = ""
+        for author in raw_authors:
+            first_name = author.split(" ")[0]
+            middle_names: list[str] = findall(" \w ", author)
+            given_name: str = first_name
+            for name in middle_names:
+                given_name += name
             for string in author.split(" "):
-                if string not in (firstName or middleNames):
-                    lastName: str = string
-            authorList.append({"family": lastName.strip(), "given": givenName.strip()})
-        return authorList
+                if string not in (first_name or middle_names):
+                    last_name: str = string
+            authors.append({"family": last_name.strip(), "given": given_name.strip()})
+        return authors
 
-    def __get_primary_metadata__(self, root, doi=None, pmid=None) -> Union[tuple[str, str, str, str], int]:
+    def get_primary_metadata(self, root, doi=None, pmid=None) -> Union[tuple[str, str, str, str], int]:
         try:
             title: str = root.xpath("//h1[@class='heading-title']/text()")[0].strip()
             journal: str = root.xpath("//button[@class='journal-actions-trigger trigger']/text()")[0].strip()
@@ -108,74 +106,88 @@ class PubMedScrapper(Scrapper):
         except IndexError:
             print("Failed to extract primary metadata")
             return 1
-        primaryMetadata = (title, journal, pmid, doi)
-        return primaryMetadata
+        primary_metadata = (title, journal, pmid, doi)
+        return primary_metadata
 
-    def __get_secondary_metadata__(self, root) -> Union[tuple[list[list[str]], str, Union[list[int], str]], int]:
+    def get_secondary_metadata(self, root) -> Union[tuple[list[list[str]], str, Union[list[int], str]], int]:
         try:
-            rawSecondaryMetadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
+            raw_secondary_metadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
         except IndexError:
             print("Failed to extract secondary metadata")
             return 1
-        year: list[list[str]] = [[rawSecondaryMetadata.split(" ")[0]]]
-        volume: str = search('([0-9]*?)\(|;([0-9]*?):', rawSecondaryMetadata).group(1)
+        year: list[list[str]] = [[raw_secondary_metadata.split(" ")[0]]]
+        volume: str = search('(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
         try:
             pages: list[int] = \
-                [int(search(':([0-9]*)', rawSecondaryMetadata).group(1)),
-                 int(search("([0-9]*)\.", rawSecondaryMetadata).group(1))]
+                [int(search(':(\d*)', raw_secondary_metadata).group(1)),
+                 int(search("(\d*)\.", raw_secondary_metadata).group(1))]
             if pages[0] > pages[1]:
                 start = str(pages[0])
                 stop = str(pages[1])
                 stop = f'{start[0:(int(len(start)) - int(len(stop)))]}{stop}'
                 pages[0], pages[1] = start, stop
         except ValueError:
-            pages: str = search(':(e[0-9]*)', rawSecondaryMetadata).group(1)
+            pages: str = search(':(e\d*)', raw_secondary_metadata).group(1)
         except AttributeError:
             pages: str = ''
-        secondaryMetadata = (year, volume, pages)
-        return secondaryMetadata
+        secondary_metadata = (year, volume, pages)
+        return secondary_metadata
 
-    def __generate_csl_json_entry__(self, authors: list, primaryMetadata: tuple[str, str, str, str], secondaryMetadata: tuple[list, str, list]) -> dict:
+    def generate_csl_json_entry(
+            self,
+            authors: list,
+            primary_metadata: tuple[str, str, str, str],
+            secondary_metadata: tuple[list, str, list]) -> dict:
         entry: dict = {}
-        entry.setdefault("title", primaryMetadata[0])
+        entry.setdefault("title", primary_metadata[0])
         entry.setdefault("type", "article")
         entry.setdefault("author", authors)
-        entry.setdefault("issued", {"raw": secondaryMetadata[0]})
-        entry.setdefault("journal", primaryMetadata[1])
-        entry.setdefault("doi", primaryMetadata[3])
-        entry.setdefault("pmid", primaryMetadata[2])
-        entry.setdefault("volume", secondaryMetadata[1])
-        if type(secondaryMetadata[2]) is list:
-            entry.setdefault("pages", f'{secondaryMetadata[2][0]}-{secondaryMetadata[2][1]}')
+        entry.setdefault("issued", {"raw": secondary_metadata[0]})
+        entry.setdefault("journal", primary_metadata[1])
+        entry.setdefault("doi", primary_metadata[3])
+        entry.setdefault("pmid", primary_metadata[2])
+        entry.setdefault("volume", secondary_metadata[1])
+        if type(secondary_metadata[2]) is list:
+            entry.setdefault("pages", f'{secondary_metadata[2][0]}-{secondary_metadata[2][1]}')
         else:
-            entry.setdefault("pages", secondaryMetadata[2])
-        entry.setdefault("id", str(authors[0]['family'].lower()) + str(secondaryMetadata[0][0][0]))
+            entry.setdefault("pages", secondary_metadata[2])
+        entry.setdefault("id", str(authors[0]['family'].lower()) + str(secondary_metadata[0][0][0]))
         return entry
 
-    def __extract_data__(self, identifierList):
-        identifieIndex = 1
-        for identifier in identifierList:
-            print(f'{identifieIndex}/{int(len(identifierList))}', end="\t")
+    def extract_data(self, identifier_list):
+        identifier_index = 1
+        for identifier in identifier_list:
+            print(f'{identifier_index}/{int(len(identifier_list))}', end="\t")
             print(f'Extracting metadata for: {identifier}')
-            root = html.fromstring(self.__get_article_page__(identifier).text)
-            if not self.__is_in_pubmed__(identifier, root):
-                identifieIndex += 1
+            root = html.fromstring(self.get_article_page(identifier).text)
+            if not self.is_in_pubmed(identifier, root):
+                identifier_index += 1
                 continue
-            primaryMetadata = self.__get_primary_metadata__(root, doi=identifier)
-            secondaryMetadata = self.__get_secondary_metadata__(root)
-            authors = self.__get_authors__(root)
-            if primaryMetadata == 1 or secondaryMetadata == 1 or authors == 1:
+            primary_metadata = self.get_primary_metadata(root, doi=identifier)
+            secondary_metadata = self.get_secondary_metadata(root)
+            authors = self.get_authors(root)
+            if primary_metadata == 1 or secondary_metadata == 1 or authors == 1:
                 continue
-            entry = self.__generate_csl_json_entry__(authors, primaryMetadata, secondaryMetadata)
-            self.articleMetadata.append(entry)
+            entry = self.generate_csl_json_entry(authors, primary_metadata, secondary_metadata)
+            self.article_metadata.append(entry)
             sleep(1)
-            identifieIndex += 1
+            identifier_index += 1
 
     def get_data(self):
-        self.__extract_data__(self.dois)
-        self.__extract_data__(self.pmids)
+        self.extract_data(self.dois)
+        self.extract_data(self.pmids)
 
 
-scrapper = PubMedScrapper(jsonData='/Users/jakubguzek/Documents/articles/doi_index.json')
-print(scrapper.dois)
-scrapper.get_data()
+class UrLContentError(Exception):
+    """ Raised when the desired content is not found within url """
+    def __init__(self, *args, **kwargs):
+        pass
+
+def main() -> int:
+    scrapper = PubMedScrapper(json_data='/home/jakubguzek/Documents/articles/doi_index.json')
+    print(scrapper.dois)
+    scrapper.get_data()
+    return 0
+
+if __name__ == "__main__":
+    main()
