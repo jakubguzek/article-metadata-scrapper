@@ -63,7 +63,7 @@ class PubMedScrapper(Scrapper):
         self.article_metadata: list[dict] = []
         self.articles_not_found: list[str] = []
 
-    def is_in_pubmed(self, doi: str, root) -> bool:
+    def is_in_pubmed(self, doi: str, root) -> int:
         try:
             query_error_message: str = root.xpath(
                 "//em[@class='altered-search-explanation query-error-message']/text()")[0]
@@ -71,9 +71,9 @@ class PubMedScrapper(Scrapper):
                 self.articles_not_found.append(doi)
                 raise UrLContentError(f"The following term was not found in PubMed: {doi}")
             else:
-                return True
+                return 0
         except IndexError:
-            return True
+            return 0
 
     def get_authors(self, root) -> Union[list[dict[str, str]]]:
         authors: list[dict[str, str]] = []
@@ -95,7 +95,7 @@ class PubMedScrapper(Scrapper):
             authors.append({"family": last_name.strip(), "given": given_name.strip()})
         return authors
 
-    def get_primary_metadata(self, root, doi=None, pmid=None) -> Union[tuple[str, str, str, str], int]:
+    def get_primary_metadata(self, root, doi=None, pmid=None) -> Union[tuple[str, str, str, str]]:
         try:
             title: str = root.xpath("//h1[@class='heading-title']/text()")[0].strip()
             journal: str = root.xpath("//button[@class='journal-actions-trigger trigger']/text()")[0].strip()
@@ -104,17 +104,15 @@ class PubMedScrapper(Scrapper):
             if doi is None:
                 doi = root.xpath("//span[@class='citation-doi']/text()")
         except IndexError:
-            print("Failed to extract primary metadata")
-            return 1
+            raise UrLContentError("Failed to extract primary metadata")
         primary_metadata = (title, journal, pmid, doi)
         return primary_metadata
 
-    def get_secondary_metadata(self, root) -> Union[tuple[list[list[str]], str, Union[list[int], str]], int]:
+    def get_secondary_metadata(self, root) -> Union[tuple[list[list[str]], str, Union[list[int], str]]]:
         try:
             raw_secondary_metadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
         except IndexError:
-            print("Failed to extract secondary metadata")
-            return 1
+            raise UrLContentError("Failed to extract secondary metadata")
         year: list[list[str]] = [[raw_secondary_metadata.split(" ")[0]]]
         volume: str = search('(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
         try:
@@ -160,13 +158,14 @@ class PubMedScrapper(Scrapper):
             print(f'{identifier_index}/{int(len(identifier_list))}', end="\t")
             print(f'Extracting metadata for: {identifier}')
             root = html.fromstring(self.get_article_page(identifier).text)
-            if not self.is_in_pubmed(identifier, root):
+            try:
+                self.is_in_pubmed(identifier, root)
+                primary_metadata = self.get_primary_metadata(root, doi=identifier)
+                secondary_metadata = self.get_secondary_metadata(root)
+                authors = self.get_authors(root)
+            except UrLContentError as error:
+                print(error)
                 identifier_index += 1
-                continue
-            primary_metadata = self.get_primary_metadata(root, doi=identifier)
-            secondary_metadata = self.get_secondary_metadata(root)
-            authors = self.get_authors(root)
-            if primary_metadata == 1 or secondary_metadata == 1 or authors == 1:
                 continue
             entry = self.generate_csl_json_entry(authors, primary_metadata, secondary_metadata)
             self.article_metadata.append(entry)
