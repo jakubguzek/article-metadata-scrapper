@@ -1,5 +1,4 @@
 import os.path
-import utils
 from abc import ABC, abstractmethod
 from json import load
 from re import search, findall
@@ -7,6 +6,7 @@ from time import sleep
 from typing import NoReturn
 from lxml import html
 from requests import get, models
+from article_metadata_scrapper import utils, exceptions
 
 
 class Scrapper(ABC):
@@ -110,11 +110,11 @@ class PubMedScrapper(Scrapper):
                 "//em[@class='altered-search-explanation query-error-message']/text()")[0]
             if ("term was ignored" in query_error_message) or ("term was not found" in query_error_message):
                 self.articles_not_found.append(doi)
-                raise UrLContentError(f"The following term was not found in PubMed: {doi}")
+                raise exceptions.UrLContentError(f"The following term was not found in PubMed: {doi}")
             else:
                 return 0
         except IndexError:
-            raise UrLContentError(f"The following term was not found in PubMed: {doi}")
+            raise exceptions.UrLContentError(f"The following term was not found in PubMed: {doi}")
 
     def get_authors(self, root) -> list:
         authors: list[dict[str, str]] = []
@@ -122,7 +122,7 @@ class PubMedScrapper(Scrapper):
             raw_authors: list[str] = root.xpath("//div[@class='authors-list']/span/a/text()")
             raw_authors = raw_authors[0:int(len(raw_authors) / 2)]
         except IndexError:
-            raise UrLContentError("Failed to extract authors")
+            raise exceptions.UrLContentError("Failed to extract authors")
         last_name: str = ""
         for author in raw_authors:
             first_name = author.split(" ")[0]
@@ -145,7 +145,7 @@ class PubMedScrapper(Scrapper):
             elif not doi:
                 doi = root.xpath("//span[@class='citation-doi']/text()")
         except IndexError:
-            raise UrLContentError("Failed to extract primary metadata")
+            raise exceptions.UrLContentError("Failed to extract primary metadata")
         primary_metadata = (title, journal, pmid, doi)
         return primary_metadata
 
@@ -153,7 +153,7 @@ class PubMedScrapper(Scrapper):
         try:
             raw_secondary_metadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
         except IndexError:
-            raise UrLContentError("Failed to extract secondary metadata")
+            raise exceptions.UrLContentError("Failed to extract secondary metadata")
         year: list[list[str]] = [[raw_secondary_metadata.split(" ")[0]]]
         volume: str = search('(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
         try:
@@ -204,7 +204,7 @@ class PubMedScrapper(Scrapper):
                 primary_metadata = self.get_primary_metadata(root, doi=identifier)
                 secondary_metadata = self.get_secondary_metadata(root)
                 authors = self.get_authors(root)
-            except UrLContentError as error:
+            except exceptions.UrLContentError as error:
                 print(error)
                 identifier_index += 1
                 continue
@@ -219,13 +219,9 @@ class PubMedScrapper(Scrapper):
         self.extract_data(self.pmids)
 
 
-class UrLContentError(Exception):
-    """ Raised when the desired content is not found within url """
-    def __init__(self, *args, **kwargs):
-        pass
-
 def main() -> int:
-    scrapper = PubMedScrapper(json_data='/home/jakubguzek/Documents/articles/doi_index.json')
+    file_path = input("Enter path to json file: ")
+    scrapper = PubMedScrapper(json_data=file_path)
     print(scrapper.dois)
     scrapper.get_data()
     return 0
