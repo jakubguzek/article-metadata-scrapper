@@ -4,14 +4,31 @@ from abc import ABC, abstractmethod
 from json import load
 from re import search, findall
 from time import sleep
-from typing import Union
+from typing import NoReturn
 from lxml import html
-from requests import get
+from requests import get, models
 
 
 class Scrapper(ABC):
+    """ Interface for other scrappers
 
-    def __init__(self, json_data=None):
+    Attributes:
+        - dois: list[str] - list of article doi identifiers as strings
+        - pmids: list[str] - list of article pmid identifiers as strings
+        - url: str - string representing url address of an article page
+        - json_data - dictionary containing article's dois and/or pmids loaded from json file
+    Methods:
+        - get_article_data(self, doi: str)
+    Abstract methods:
+        - get_authors(self, root)
+        - get_primary_metadata(root, doi=None, pmid=None)
+        - get_secondary_metadata(self, root):
+        - generate_csl_json_entry(self, authors, primary_metadata, secondary_metadata):
+        - extract_data(self, identifier_list):
+        - get_data(self):
+    """
+
+    def __init__(self, json_data=None) -> NoReturn:
         self.dois: list[str] = []
         self.pmids: list[str] = []
         self.url: str = ""
@@ -24,7 +41,8 @@ class Scrapper(ABC):
             except AttributeError:
                 self.pmids.append(data["pmid"])
 
-    def get_article_page(self, doi: str):
+    def get_article_page(self, doi: str) -> models.Response:
+        """Set appropriate article url and return a requests.models.Response object from this url."""
         headers = {'User-Agent': utils.get_random_agent()}
         article_url: str = f'{self.url}"{doi}"'
         page = get(article_url, headers=headers)
@@ -32,38 +50,61 @@ class Scrapper(ABC):
 
     @abstractmethod
     def get_authors(self, root):
+        """Get names of authors of an article from html.HtmlElement and return them as list."""
         pass
 
     @abstractmethod
     def get_primary_metadata(self, root, doi=None, pmid=None):
+        """Get article title, journal and doi or pmid and return them as a tuple."""
         pass
 
     @abstractmethod
     def get_secondary_metadata(self, root):
+        """Get other metadata such as publication dates, volume, pages, etc. and return them as a tuple."""
         pass
 
     @abstractmethod
     def generate_csl_json_entry(self, authors, primary_metadata, secondary_metadata):
+        """Generate an entry from extracted data in a form of csl_json format compliant dictionary."""
         pass
 
     @abstractmethod
     def extract_data(self, identifier_list):
+        """Extract data from html.HtmlElement of each article and append it to self.article_metadata in csl_json format.
+        """
         pass
 
     @abstractmethod
     def get_data(self):
+        """Get article metadata by doi nad by pmid."""
         pass
 
 
 class PubMedScrapper(Scrapper):
+    """Implementation of Scrapper for getting article metadata from https://pubmed.ncbi.nlm.nih.gov
 
-    def __init__(self, json_data=None):
+    Instance methods:
+        - is_in_pubmed(self, doi: str, root: xpath) -> int
+        - get_authors(self, root) -> list:
+        - get_primary_metadata(self, root, doi="", pmid="") -> tuple:
+        - get_secondary_metadata(self, root) -> tuple:
+        - generate_csl_json_entry(
+            self,
+            authors: list,
+            primary_metadata: tuple[str, str, str, str],
+            secondary_metadata: tuple[list, str, list]) -> dict:
+        - extract_data(self, identifier_list) -> int:
+        - get_data(self):
+    """
+
+    def __init__(self, json_data=None) -> NoReturn:
         super().__init__(json_data)
         self.url = f'https://pubmed.ncbi.nlm.nih.gov/?term='
         self.article_metadata: list[dict] = []
         self.articles_not_found: list[str] = []
 
     def is_in_pubmed(self, doi: str, root) -> int:
+        """Check if article is in available in PubMed, otherwise raise an exception"""
         try:
             query_error_message: str = root.xpath(
                 "//em[@class='altered-search-explanation query-error-message']/text()")[0]
@@ -73,9 +114,9 @@ class PubMedScrapper(Scrapper):
             else:
                 return 0
         except IndexError:
-            return 0
+            raise UrLContentError(f"The following term was not found in PubMed: {doi}")
 
-    def get_authors(self, root) -> Union[list[dict[str, str]]]:
+    def get_authors(self, root) -> list:
         authors: list[dict[str, str]] = []
         try:
             raw_authors: list[str] = root.xpath("//div[@class='authors-list']/span/a/text()")
@@ -95,20 +136,20 @@ class PubMedScrapper(Scrapper):
             authors.append({"family": last_name.strip(), "given": given_name.strip()})
         return authors
 
-    def get_primary_metadata(self, root, doi=None, pmid=None) -> Union[tuple[str, str, str, str]]:
+    def get_primary_metadata(self, root, doi="", pmid="") -> tuple:
         try:
             title: str = root.xpath("//h1[@class='heading-title']/text()")[0].strip()
             journal: str = root.xpath("//button[@class='journal-actions-trigger trigger']/text()")[0].strip()
-            if pmid is None:
+            if not pmid:
                 pmid = root.xpath("//strong[@class='current-id']/text()")[0].strip()
-            if doi is None:
+            elif not doi:
                 doi = root.xpath("//span[@class='citation-doi']/text()")
         except IndexError:
             raise UrLContentError("Failed to extract primary metadata")
         primary_metadata = (title, journal, pmid, doi)
         return primary_metadata
 
-    def get_secondary_metadata(self, root) -> Union[tuple[list[list[str]], str, Union[list[int], str]]]:
+    def get_secondary_metadata(self, root) -> tuple:
         try:
             raw_secondary_metadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
         except IndexError:
@@ -145,14 +186,14 @@ class PubMedScrapper(Scrapper):
         entry.setdefault("doi", primary_metadata[3])
         entry.setdefault("pmid", primary_metadata[2])
         entry.setdefault("volume", secondary_metadata[1])
-        if type(secondary_metadata[2]) is list:
+        if isinstance(secondary_metadata[1], list):
             entry.setdefault("pages", f'{secondary_metadata[2][0]}-{secondary_metadata[2][1]}')
         else:
             entry.setdefault("pages", secondary_metadata[2])
         entry.setdefault("id", str(authors[0]['family'].lower()) + str(secondary_metadata[0][0][0]))
         return entry
 
-    def extract_data(self, identifier_list):
+    def extract_data(self, identifier_list) -> int:
         identifier_index = 1
         for identifier in identifier_list:
             print(f'{identifier_index}/{int(len(identifier_list))}', end="\t")
@@ -171,6 +212,7 @@ class PubMedScrapper(Scrapper):
             self.article_metadata.append(entry)
             sleep(1)
             identifier_index += 1
+        return 0
 
     def get_data(self):
         self.extract_data(self.dois)
@@ -187,6 +229,7 @@ def main() -> int:
     print(scrapper.dois)
     scrapper.get_data()
     return 0
+
 
 if __name__ == "__main__":
     main()
