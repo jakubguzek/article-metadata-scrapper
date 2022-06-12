@@ -217,15 +217,3 @@ class PubMedScrapper(Scrapper):
     def get_data(self):
         self.extract_data(self.dois)
         self.extract_data(self.pmids)
-
-
-def main() -> int:
-    file_path = input("Enter path to json file: ")
-    scrapper = PubMedScrapper(json_data=file_path)
-    print(scrapper.dois)
-    scrapper.get_data()
-    return 0
-
-
-if __name__ == "__main__":
-    main()
