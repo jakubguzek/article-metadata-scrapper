@@ -21,4 +21,3 @@ user_agent_list = [
 
 def get_random_agent():
     return choice(user_agent_list)
-
