@@ -1,4 +1,4 @@
-# articleMetadataScrapper
+# Article Metadata Scrapper
 
 Simple, sloppy webscrapper for collecting scientific article's metadata such as:
 - names of the article authors
@@ -12,3 +12,4 @@ Simple, sloppy webscrapper for collecting scientific article's metadata such as:
 This module contains interface for the webscprapper along with its implementation for scrapping the metadata from PubMed
 
 ## TODO
+    - command-line interface and command-line argument parsing for article-metadata-scrapper
