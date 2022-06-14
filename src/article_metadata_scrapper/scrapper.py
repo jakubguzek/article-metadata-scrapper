@@ -113,8 +113,12 @@ class PubMedScrapper(Scrapper):
                 raise exceptions.UrLContentError(f"The following term was not found in PubMed: {doi}")
             else:
                 return 0
+        # It's stupid but if index is out of range it means that the query-error-message was not found within url.
+        # Ergo, root.xpath returns empty list, and IndexError is raised.
+        # Effectively it means that we return 0 from the method when there is an error.
+        # I don't like it, but I'm going to leave it as is for now
         except IndexError:
-            raise exceptions.UrLContentError(f"The following term was not found in PubMed: {doi}")
+            return 0
 
     def get_authors(self, root) -> list:
         authors: list[dict[str, str]] = []
@@ -165,10 +169,11 @@ class PubMedScrapper(Scrapper):
                 stop = str(pages[1])
                 stop = f'{start[0:(int(len(start)) - int(len(stop)))]}{stop}'
                 pages[0], pages[1] = start, stop
-        except ValueError:
-            pages: str = search(':(e\d*)', raw_secondary_metadata).group(1)
-        except AttributeError:
-            pages: str = ''
+        except (ValueError, AttributeError):
+            try:
+                pages: str = search(r':(e\d*)', raw_secondary_metadata).group(1)
+            except AttributeError:
+                pages: str = ''
         secondary_metadata = (year, volume, pages)
         return secondary_metadata
 
