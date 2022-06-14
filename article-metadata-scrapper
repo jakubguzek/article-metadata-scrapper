@@ -2,7 +2,7 @@
 
 import sys
 
-from article_metadata_scrapper.__main__ import main
+from src.article_metadata_scrapper.__main__ import main
 
 if __name__ == "__main__":
     sys.exit(main())
