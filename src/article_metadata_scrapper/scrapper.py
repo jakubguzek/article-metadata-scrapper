@@ -109,7 +109,7 @@ class PubMedScrapper(Scrapper):
                 "//em[@class='altered-search-explanation query-error-message']/text()")[0]
             if ("term was ignored" in query_error_message) or ("term was not found" in query_error_message):
                 self.articles_not_found.append(doi)
-                raise exceptions.UrLContentError(f"The following term was not found in PubMed: {doi}")
+                raise exceptions.HtmlContentError(f"The following term was not found in PubMed: {doi}")
             else:
                 return 0
         # It's stupid but if index is out of range it means that the query-error-message was not found within url.
@@ -125,7 +125,7 @@ class PubMedScrapper(Scrapper):
             raw_authors: list[str] = root.xpath("//div[@class='authors-list']/span/a/text()")
             raw_authors = raw_authors[0:int(len(raw_authors) / 2)]
         except IndexError:
-            raise exceptions.UrLContentError("Failed to extract authors")
+            raise exceptions.HtmlContentError("Failed to extract authors")
         last_name: str = ""
         for author in raw_authors:
             first_name = author.split(" ")[0]
@@ -148,7 +148,7 @@ class PubMedScrapper(Scrapper):
             elif not doi:
                 doi = root.xpath("//span[@class='citation-doi']/text()")
         except IndexError:
-            raise exceptions.UrLContentError("Failed to extract primary metadata")
+            raise exceptions.HtmlContentError("Failed to extract primary metadata")
         primary_metadata = (title, journal, pmid, doi)
         return primary_metadata
 
@@ -156,7 +156,7 @@ class PubMedScrapper(Scrapper):
         try:
             raw_secondary_metadata: str = root.xpath("//span[@class='cit']/text()")[0].strip()
         except IndexError:
-            raise exceptions.UrLContentError("Failed to extract secondary metadata")
+            raise exceptions.HtmlContentError("Failed to extract secondary metadata")
         year: list[list[str]] = [[raw_secondary_metadata.split(" ")[0]]]
         volume: str = search(r'(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
         try:
@@ -208,7 +208,7 @@ class PubMedScrapper(Scrapper):
                 primary_metadata = self.get_primary_metadata(root, doi=identifier)
                 secondary_metadata = self.get_secondary_metadata(root)
                 authors = self.get_authors(root)
-            except exceptions.UrLContentError as error:
+            except exceptions.HtmlContentError as error:
                 print(error)
                 identifier_index += 1
                 continue

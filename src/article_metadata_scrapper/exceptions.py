@@ -1,5 +1,4 @@
+class HtmlContentError(Exception):
+    """Raised when the desired expression is not found within url page html content."""
+    pass
 
-class UrLContentError(Exception):
-    """ Raised when the desired content is not found within url """
-    def __init__(self, *args, **kwargs):
-        pass
