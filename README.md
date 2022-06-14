@@ -12,4 +12,4 @@ Simple, sloppy webscrapper for collecting scientific article's metadata such as:
 This module contains interface for the webscprapper along with its implementation for scrapping the metadata from PubMed
 
 ## TODO
-    - command-line interface and command-line argument parsing for article-metadata-scrapper
+- command-line interface and command-line argument parsing for article-metadata-scrapper
