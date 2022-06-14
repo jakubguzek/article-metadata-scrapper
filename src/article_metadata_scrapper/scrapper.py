@@ -129,7 +129,7 @@ class PubMedScrapper(Scrapper):
         last_name: str = ""
         for author in raw_authors:
             first_name = author.split(" ")[0]
-            middle_names: list[str] = findall(" \w ", author)
+            middle_names: list[str] = findall(r" \w ", author)
             given_name: str = first_name
             for name in middle_names:
                 given_name += name
@@ -158,11 +158,11 @@ class PubMedScrapper(Scrapper):
         except IndexError:
             raise exceptions.UrLContentError("Failed to extract secondary metadata")
         year: list[list[str]] = [[raw_secondary_metadata.split(" ")[0]]]
-        volume: str = search('(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
+        volume: str = search(r'(\d*?)\(|;(\d*?):', raw_secondary_metadata).group(1)
         try:
             pages: list[int] = \
-                [int(search(':(\d*)', raw_secondary_metadata).group(1)),
-                 int(search("(\d*)\.", raw_secondary_metadata).group(1))]
+                [int(search(r':(\d*)', raw_secondary_metadata).group(1)),
+                 int(search(r"(\d*)\.", raw_secondary_metadata).group(1))]
             if pages[0] > pages[1]:
                 start = str(pages[0])
                 stop = str(pages[1])
