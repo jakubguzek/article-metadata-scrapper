@@ -2,11 +2,10 @@ import os.path
 from abc import ABC, abstractmethod
 from json import load
 from re import search, findall
-from time import sleep
 from typing import NoReturn
 from lxml import html
 from requests import get, models
-from article_metadata_scrapper import utils, exceptions
+from . import utils, exceptions
 
 
 class Scrapper(ABC):
@@ -215,7 +214,6 @@ class PubMedScrapper(Scrapper):
                 continue
             entry = self.generate_csl_json_entry(authors, primary_metadata, secondary_metadata)
             self.article_metadata.append(entry)
-            sleep(1)
             identifier_index += 1
         return 0
 
