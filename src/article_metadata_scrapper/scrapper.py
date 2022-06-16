@@ -1,10 +1,10 @@
 import os.path
+import requests
 from abc import ABC, abstractmethod
 from json import load
 from re import search, findall
 from typing import NoReturn
 from lxml import html
-from requests import get, models
 from . import utils, exceptions
 
 
@@ -40,11 +40,11 @@ class Scrapper(ABC):
             except AttributeError:
                 self.pmids.append(data["pmid"])
 
-    def get_article_page(self, doi: str) -> models.Response:
+    def get_article_page(self, doi: str) -> requests.models.Response:
         """Set appropriate article url and return a requests.models.Response object from this url."""
         headers = {'User-Agent': utils.get_random_agent()}
         article_url: str = f'{self.url}"{doi}"'
-        page = get(article_url, headers=headers)
+        page = requests.get(article_url, headers=headers)
         return page
 
     @abstractmethod
