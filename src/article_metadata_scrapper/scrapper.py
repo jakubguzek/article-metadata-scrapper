@@ -104,7 +104,15 @@ class PubMedScrapper(Scrapper):
         self.articles_not_found: list[str] = []
 
     def is_in_pubmed(self, doi: str, root) -> int:
-        """Check if article is in available in PubMed, otherwise raise an exception"""
+        """Checks if article is in available in PubMed.
+
+        Args:
+            doi: article doi identifier
+            root: requests.Response object from article url
+
+        Returns:
+            Returns 0 if it succeeds without errors
+        """
         try:
             query_error_message: str = root.xpath(
                 "//em[@class='altered-search-explanation query-error-message']/text()"
