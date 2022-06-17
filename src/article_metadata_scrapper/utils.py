@@ -1,6 +1,10 @@
-from random import choice
+import json
+import os.path
+import random
+from typing import Any
 
-user_agent_list = [
+
+USER_AGENT_LIST = [
     # Firefox
     'Mozilla/4.0 (compatible; MSIE 9.0; Windows NT 6.1)',
     'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko',
@@ -19,5 +23,19 @@ user_agent_list = [
 ]
 
 
-def get_random_agent():
-    return choice(user_agent_list)
+def get_random_agent() -> str:
+    return random.choice(USER_AGENT_LIST)
+
+
+def load_json_data(json_file: str) -> dict[str, Any]:
+    path: str = os.path.realpath(os.path.expanduser(json_file))
+    with open(path, "r") as f:
+        json_data: dict = json.load(f)
+    return json_data
+
+
+def de_duplicate_list(iterable: list, preserve_order=True) -> list:
+    if preserve_order:
+        return list(dict.fromkeys(iterable))
+    else:
+        return list(set(iterable))
